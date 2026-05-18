@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: guestbook-servicemonitor
+  namespace: monitoring
+  labels:
+    release: kube-prom-stack
+spec:
+  selector:
+    matchLabels:
+      app: guestbook-frontend
+  namespaceSelector:
+    matchNames:
+      - default
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s

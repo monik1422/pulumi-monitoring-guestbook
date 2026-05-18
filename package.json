@@ -1,0 +1,13 @@
+{
+  "name": "guestbook-monitoring",
+  "version": "1.0.0",
+  "devDependencies": {},
+  "dependencies": {
+    "@pulumi/pulumi": "^4.0.0",
+    "@pulumi/kubernetes": "^4.0.0"
+  },
+  "scripts": {
+    "start": "pulumi up",
+    "destroy": "pulumi destroy --yes"
+  }
+}
