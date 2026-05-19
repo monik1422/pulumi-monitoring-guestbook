@@ -1,141 +1,482 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as k8s from "@pulumi/kubernetes";
 
-// Config
+/**
+ * ---------------------------------------------------------
+ * CONFIGURATION
+ * ---------------------------------------------------------
+ */
+
 const config = new pulumi.Config();
-const grafanaAdminPassword = config.requireSecret("grafanaAdminPassword");
-const monitoringNamespace = "monitoring";
+
+const grafanaAdminPassword =
+    config.requireSecret("grafanaAdminPassword");
+
+const monitoringNamespaceName = "monitoring";
 const guestbookNamespace = "default";
 
-// 1. Create monitoring namespace
-const monitoringNs = new k8s.core.v1.Namespace("monitoring-namespace", {
-  metadata: { name: monitoringNamespace },
-});
+/**
+ * ---------------------------------------------------------
+ * MONITORING NAMESPACE
+ * ---------------------------------------------------------
+ */
 
-// 2. Deploy Guestbook application resources (frontend + redis + backend)
-// Minimal guestbook frontend Deployment and Service exposing /metrics on port 80
-const guestbookLabels = { app: "guestbook-frontend" };
-
-const guestbookDeployment = new k8s.apps.v1.Deployment("guestbook-frontend-deploy", {
-  metadata: { namespace: guestbookNamespace, name: "guestbook-frontend" },
-  spec: {
-    replicas: 1,
-    selector: { matchLabels: guestbookLabels },
-    template: {
-      metadata: { labels: guestbookLabels },
-      spec: {
-        containers: [{
-          name: "frontend",
-          image: "k8s.gcr.io/echoserver:1.10", // simple image; replace with actual guestbook frontend if desired
-          ports: [{ containerPort: 8080, name: "http" }],
-          // Expose a basic metrics endpoint using a sidecar or instrumented app in real scenario.
-        }],
-      },
-    },
-  },
-});
-
-// Service for frontend with named port "http"
-const guestbookService = new k8s.core.v1.Service("guestbook-frontend-svc", {
-  metadata: {
-    namespace: guestbookNamespace,
-    name: "guestbook-frontend",
-    labels: guestbookLabels,
-    annotations: {
-      // optional fallback if ServiceMonitor not used
-      "prometheus.io/scrape": "true",
-      "prometheus.io/port": "8080",
-      "prometheus.io/path": "/metrics"
+const monitoringNamespace = new k8s.core.v1.Namespace(
+    "monitoring-namespace",
+    {
+        metadata: {
+            name: monitoringNamespaceName,
+        },
     }
-  },
-  spec: {
-    selector: guestbookLabels,
-    ports: [{ port: 80, targetPort: "http", name: "http" }],
-    type: "ClusterIP",
-  },
-}, { dependsOn: guestbookDeployment });
-
-// 3. Install kube-prometheus-stack Helm chart
-const kubeProm = new k8s.helm.v3.Chart("kube-prom-stack", {
-  chart: "kube-prometheus-stack",
-  fetchOpts: { repo: "https://prometheus-community.github.io/helm-charts" },
-  version: "45.6.0", // pin a stable version; adjust if needed
-  namespace: monitoringNs.metadata.name,
-  values: {
-    grafana: {
-      enabled: true,
-      adminUser: "admin",
-      adminPassword: grafanaAdminPassword,
-      service: { type: "LoadBalancer", port: 80, targetPort: 3000 },
-      ingress: { enabled: false }
-    },
-    prometheus: {
-      prometheusSpec: {
-        serviceMonitorSelectorNilUsesHelmValues: false
-      }
-    },
-    kubeStateMetrics: { enabled: true },
-    nodeExporter: { enabled: true }
-  }
-}, { dependsOn: monitoringNs });
-
-// 4. Create ServiceMonitor to scrape Guestbook service
-// Use CustomResource because ServiceMonitor is a CRD
-const serviceMonitor = new k8s.apiextensions.CustomResource("guestbook-servicemonitor", {
-  apiVersion: "monitoring.coreos.com/v1",
-  kind: "ServiceMonitor",
-  metadata: {
-    name: "guestbook-servicemonitor",
-    namespace: monitoringNamespace,
-    labels: { release: "kube-prom-stack" }
-  },
-  spec: {
-    selector: { matchLabels: guestbookLabels },
-    namespaceSelector: { matchNames: [guestbookNamespace] },
-    endpoints: [{
-      port: "http",
-      path: "/metrics",
-      interval: "15s"
-    }]
-  }
-}, { dependsOn: [kubeProm, guestbookService] });
-
-// 5. Read Grafana service and secret created by the chart and export access details
-// Chart resource names vary by chart version. The chart typically creates a Service with label app.kubernetes.io/name=grafana
-const grafanaService = k8s.core.v1.Service.get("grafana-service",
-  pulumi.interpolate`${monitoringNamespace}/kube-prometheus-stack-grafana`,
-  { async: true }
 );
 
-// Fallback: if the above name does not exist in your chart version, you can find the service with kubectl -n monitoring get svc -l app.kubernetes.io/name=grafana
+/**
+ * ---------------------------------------------------------
+ * REDIS MASTER
+ * ---------------------------------------------------------
+ */
 
-// Grafana secret name created by chart is often kube-prometheus-stack-grafana
-const grafanaSecret = k8s.core.v1.Secret.get("grafana-secret",
-  pulumi.interpolate`${monitoringNamespace}/kube-prometheus-stack-grafana`,
-  { async: true }
+const redisMasterLabels = {
+    app: "redis",
+    role: "master",
+};
+
+const redisMasterDeployment = new k8s.apps.v1.Deployment(
+    "redis-master",
+    {
+        metadata: {
+            namespace: guestbookNamespace,
+            name: "redis-master",
+        },
+        spec: {
+            replicas: 1,
+            selector: {
+                matchLabels: redisMasterLabels,
+            },
+            template: {
+                metadata: {
+                    labels: redisMasterLabels,
+                },
+                spec: {
+                    containers: [
+                        {
+                            name: "master",
+                            image: "redis:6.2",
+                            ports: [
+                                {
+                                    containerPort: 6379,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+        },
+    }
 );
 
-// Helper to build URL from service status
-const grafanaUrl = grafanaService.status.apply(s => {
-  const lb = s?.loadBalancer?.ingress?.[0];
-  if (!lb) return "pending";
-  const host = lb.hostname ?? lb.ip;
-  return `http://${host}`;
-});
+const redisMasterService = new k8s.core.v1.Service(
+    "redis-master-service",
+    {
+        metadata: {
+            namespace: guestbookNamespace,
+            name: "redis-master",
+            labels: redisMasterLabels,
+        },
+        spec: {
+            selector: redisMasterLabels,
+            ports: [
+                {
+                    port: 6379,
+                    targetPort: 6379,
+                },
+            ],
+        },
+    },
+    { dependsOn: redisMasterDeployment }
+);
 
-// Extract admin password from secret if available
-const grafanaAdminUser = pulumi.output("admin");
-const grafanaAdminPasswordOut = grafanaSecret.data.apply(d => {
-  if (!d) return pulumi.secret("unknown");
-  // chart secret key may be "admin-password" or "grafana-admin-password"
-  const key = Object.keys(d).find(k => k.toLowerCase().includes("admin"));
-  if (!key) return pulumi.secret("unknown");
-  return pulumi.secret(Buffer.from(d[key], "base64").toString());
-});
+/**
+ * ---------------------------------------------------------
+ * REDIS REPLICA
+ * ---------------------------------------------------------
+ */
 
-// Exports
+const redisReplicaLabels = {
+    app: "redis",
+    role: "replica",
+};
+
+const redisReplicaDeployment = new k8s.apps.v1.Deployment(
+    "redis-replica",
+    {
+        metadata: {
+            namespace: guestbookNamespace,
+            name: "redis-replica",
+        },
+        spec: {
+            replicas: 1,
+            selector: {
+                matchLabels: redisReplicaLabels,
+            },
+            template: {
+                metadata: {
+                    labels: redisReplicaLabels,
+                },
+                spec: {
+                    containers: [
+                        {
+                            name: "replica",
+                            image: "gcr.io/google_samples/gb-redisslave:v3",
+                            env: [
+                                {
+                                    name: "GET_HOSTS_FROM",
+                                    value: "dns",
+                                },
+                            ],
+                            ports: [
+                                {
+                                    containerPort: 6379,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+        },
+    }
+);
+
+const redisReplicaService = new k8s.core.v1.Service(
+    "redis-replica-service",
+    {
+        metadata: {
+            namespace: guestbookNamespace,
+            name: "redis-replica",
+            labels: redisReplicaLabels,
+        },
+        spec: {
+            selector: redisReplicaLabels,
+            ports: [
+                {
+                    port: 6379,
+                    targetPort: 6379,
+                },
+            ],
+        },
+    },
+    { dependsOn: redisReplicaDeployment }
+);
+
+/**
+ * ---------------------------------------------------------
+ * GUESTBOOK FRONTEND
+ * ---------------------------------------------------------
+ */
+
+const guestbookLabels = {
+    app: "guestbook",
+    tier: "frontend",
+};
+
+const guestbookDeployment = new k8s.apps.v1.Deployment(
+    "guestbook-frontend",
+    {
+        metadata: {
+            namespace: guestbookNamespace,
+            name: "guestbook-frontend",
+        },
+        spec: {
+            replicas: 2,
+            selector: {
+                matchLabels: guestbookLabels,
+            },
+            template: {
+                metadata: {
+                    labels: guestbookLabels,
+
+                    annotations: {
+                        "prometheus.io/scrape": "true",
+                        "prometheus.io/port": "80",
+                        "prometheus.io/path": "/",
+                    },
+                },
+                spec: {
+                    containers: [
+                        {
+                            name: "php-redis",
+                            image:
+                                "gcr.io/google-samples/gb-frontend:v5",
+
+                            env: [
+                                {
+                                    name: "GET_HOSTS_FROM",
+                                    value: "dns",
+                                },
+                            ],
+
+                            ports: [
+                                {
+                                    containerPort: 80,
+                                    name: "http",
+                                },
+                            ],
+
+                            resources: {
+                                requests: {
+                                    cpu: "100m",
+                                    memory: "128Mi",
+                                },
+                                limits: {
+                                    cpu: "250m",
+                                    memory: "256Mi",
+                                },
+                            },
+                        },
+                    ],
+                },
+            },
+        },
+    },
+    {
+        dependsOn: [
+            redisMasterDeployment,
+            redisReplicaDeployment,
+        ],
+    }
+);
+
+const guestbookService = new k8s.core.v1.Service(
+    "guestbook-service",
+    {
+        metadata: {
+            namespace: guestbookNamespace,
+            name: "guestbook",
+            labels: guestbookLabels,
+
+            annotations: {
+                "prometheus.io/scrape": "true",
+                "prometheus.io/port": "80",
+                "prometheus.io/path": "/",
+            },
+        },
+
+        spec: {
+            type: "LoadBalancer",
+
+            selector: guestbookLabels,
+
+            ports: [
+                {
+                    port: 80,
+                    targetPort: "http",
+                    protocol: "TCP",
+                    name: "http",
+                },
+            ],
+        },
+    },
+    { dependsOn: guestbookDeployment }
+);
+
+/**
+ * ---------------------------------------------------------
+ * KUBE PROMETHEUS STACK
+ * ---------------------------------------------------------
+ */
+
+const kubePrometheusStack = new k8s.helm.v3.Chart(
+    "kube-prometheus-stack",
+    {
+        chart: "kube-prometheus-stack",
+        version: "45.7.1",
+        namespace: monitoringNamespace.metadata.name,
+        fetchOpts: {
+            repo: "https://prometheus-community.github.io/helm-charts",
+        },
+        values: {
+            prometheusOperator: {
+                enabled: true,
+            },
+            grafana: {
+                enabled: true,
+                adminUser: "admin",
+                adminPassword: grafanaAdminPassword,
+                service: {
+                    type: "LoadBalancer",
+                    port: 80,
+                    targetPort: 3000,
+                },
+            },
+            prometheus: {
+                enabled: true,
+                prometheusSpec: {
+                    serviceMonitorSelectorNilUsesHelmValues: false,
+                },
+            },
+            alertmanager: {
+                enabled: true,
+            },
+            kubeStateMetrics: {
+                enabled: true,
+            },
+            nodeExporter: {
+                enabled: true,
+            },
+        },
+    },
+    {
+        dependsOn: monitoringNamespace,
+    }
+);
+
+/**
+ * ---------------------------------------------------------
+ * SERVICE MONITOR
+ * ---------------------------------------------------------
+ */
+
+const guestbookServiceMonitor =
+    new k8s.apiextensions.CustomResource(
+        "guestbook-servicemonitor",
+        {
+            apiVersion: "monitoring.coreos.com/v1",
+
+            kind: "ServiceMonitor",
+
+            metadata: {
+                name: "guestbook-servicemonitor",
+
+                namespace: monitoringNamespaceName,
+
+                labels: {
+                    release: "kube-prometheus-stack",
+                },
+            },
+
+            spec: {
+                selector: {
+                    matchLabels: guestbookLabels,
+                },
+
+                namespaceSelector: {
+                    matchNames: [guestbookNamespace],
+                },
+
+                endpoints: [
+                    {
+                        port: "http",
+
+                        path: "/",
+
+                        interval: "15s",
+                    },
+                ],
+            },
+        },
+        {
+            dependsOn: [
+                kubePrometheusStack,
+                guestbookService,
+            ],
+        }
+    );
+
+/**
+ * ---------------------------------------------------------
+ * GRAFANA RESOURCES
+ * ---------------------------------------------------------
+ */
+
+const grafanaService = kubePrometheusStack.getResource(
+    "v1/Service",
+    "monitoring/kube-prometheus-stack-grafana"
+);
+
+const grafanaSecret = kubePrometheusStack.getResource(
+    "v1/Secret",
+    "monitoring/kube-prometheus-stack-grafana"
+);
+
+/**
+ * ---------------------------------------------------------
+ * BUILD GRAFANA URL
+ * ---------------------------------------------------------
+ */
+
+const grafanaUrl = grafanaService.status.apply(
+    (status) => {
+        const ingress =
+            status?.loadBalancer?.ingress?.[0];
+
+        if (!ingress) {
+            return "pending";
+        }
+
+        const host = ingress.hostname || ingress.ip;
+
+        return `http://${host}`;
+    }
+);
+
+/**
+ * ---------------------------------------------------------
+ * EXTRACT GRAFANA PASSWORD
+ * ---------------------------------------------------------
+ */
+
+const grafanaPasswordOutput =
+    grafanaSecret.data.apply((data) => {
+        if (!data) {
+            return pulumi.secret("unknown");
+        }
+
+        const passwordKey = Object.keys(data).find(
+            (k) =>
+                k.toLowerCase().includes("admin")
+        );
+
+        if (!passwordKey) {
+            return pulumi.secret("unknown");
+        }
+
+        return pulumi.secret(
+            Buffer.from(
+                data[passwordKey],
+                "base64"
+            ).toString()
+        );
+    });
+
+/**
+ * ---------------------------------------------------------
+ * EXPORTS
+ * ---------------------------------------------------------
+ */
+
+export const guestbookUrl =
+    guestbookService.status.apply((status) => {
+        const ingress =
+            status?.loadBalancer?.ingress?.[0];
+
+        if (!ingress) {
+            return "pending";
+        }
+
+        const host = ingress.hostname || ingress.ip;
+
+        return `http://${host}`;
+    });
+
 export const grafanaAccessUrl = grafanaUrl;
-export const grafanaUser = grafanaAdminUser;
-export const grafanaPassword = grafanaAdminPasswordOut;
-export const monitoringNamespaceOut = monitoringNamespace;
-export const guestbookNamespaceOut = guestbookNamespace;
+
+export const grafanaUsername = "admin";
+
+export const grafanaPassword =
+    grafanaPasswordOutput;
+
+export const monitoringNamespaceOutput =
+    monitoringNamespaceName;
+
+export const guestbookNamespaceOutput =
+    guestbookNamespace;
