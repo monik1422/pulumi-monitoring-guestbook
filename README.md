@@ -82,6 +82,9 @@ monitoring → Prometheus + Grafana
 🌐 Access Applications
 🎯 Guestbook Application
 
+<img width="1486" height="365" alt="image" src="https://github.com/user-attachments/assets/2c1d2d4c-52c4-46fc-a287-e8cbe45681b0" />
+
+
 Get LoadBalancer URL:
 kubectl get svc
 
