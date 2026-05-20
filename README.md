@@ -35,10 +35,14 @@ AWS LoadBalancer (ELB)
 Docker images (Guestbook + sample metrics app)
 
 📁 Project Structure
-components/
- ├── index.ts        # Pulumi infrastructure code
- ├── package.json
- ├── tsconfig.json
+pulumi-monitoring-guestbook/
+│
+├── Pulumi.yaml
+├── Pulumi.dev.yaml
+├── package.json
+├── servicemonitor.yaml
+├── index.ts
+├── README.md
 
 
 ⚙️ Prerequisites
@@ -47,7 +51,7 @@ Node.js (>= 18)
 Pulumi CLI
 AWS CLI configured
 kubectl
-EKS cluster already created
+AWS EKS cluster already created
 
 Verify:
 kubectl get nodes
