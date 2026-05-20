@@ -3,13 +3,11 @@
 This project extends the classic Kubernetes Guestbook application by adding full observability using Prometheus and Grafana, deployed using Pulumi (TypeScript) on an AWS EKS cluster.
 
 It demonstrates how to:
-
 Deploy a multi-tier Kubernetes application
 Install monitoring stack using Helm (kube-prometheus-stack)
 Configure Prometheus scraping using ServiceMonitor
 Visualize metrics in Grafana dashboards
 Expose services using AWS LoadBalancer (ALB / ELB)
-
 
 📦 Architecture Overview
 
@@ -44,7 +42,6 @@ pulumi-monitoring-guestbook/
 ├── index.ts
 ├── README.md
 
-
 ⚙️ Prerequisites
 Install:
 Node.js (>= 18)
@@ -53,13 +50,14 @@ AWS CLI configured
 kubectl
 AWS EKS cluster already created
 
+<img width="1367" height="637" alt="image" src="https://github.com/user-attachments/assets/6c52d4b9-55a3-4e53-ba7d-20e46ce23426" />
+
 Verify:
 kubectl get nodes
 pulumi version
 aws sts get-caller-identity
 
 🚀 Deployment Steps
-
 1. Clone and install
 git clone https://github.com/pulumi/examples.git
 cd C:\Users\monik\examples\kubernetes-ts-guestbook\components
@@ -79,7 +77,8 @@ pulumi up
 
 5. Confirm Pulumi state
 pulumi stack output
-Current stack outputs (6):
+
+
     OUTPUT                     VALUE
     grafanaAccessUrl           http://a4d972159612e429894bee08090f7a1e-942827012.us-east-1.elb.amazonaws.com
     grafanaPassword            [secret]
@@ -100,14 +99,16 @@ monitoring → Prometheus + Grafana
 🌐 Access Applications
 🎯 Guestbook Application
 
+Access:
+http://a1a48a4c72115444b8099a12b80645ac-1227882136.us-east-1.elb.amazonaws.com
+
 <img width="1486" height="365" alt="image" src="https://github.com/user-attachments/assets/2c1d2d4c-52c4-46fc-a287-e8cbe45681b0" />
 
 
 Get LoadBalancer URL:
 kubectl get svc
 
-Access:
-http://<EXTERNAL-LOADBALANCER>
+
 📊 Grafana Dashboard
 
 Get service:
@@ -117,13 +118,13 @@ Find:
 kube-prometheus-stack-grafana
 
 Open:
-http://<EXTERNAL-IP>
+http://a4d972159612e429894bee08090f7a1e-942827012.us-east-1.elb.amazonaws.com
 
 Login:
 Username: admin
 Password: admin123 (or configured secret)
 
-<img width="1902" height="956" alt="image" src="https://github.com/user-attachments/assets/b39ee098-cd8c-46b9-8459-7e3c376b0118" />
+<img width="1902" height="940" alt="image" src="https://github.com/user-attachments/assets/223b96a8-2d91-4e5e-b5a2-d5d3ca6a5914" />
 
 
 📈 Prometheus UI
