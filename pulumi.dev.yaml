@@ -1,0 +1,5 @@
+encryptionsalt: v1:RYVjs9JXvJc=:v1:8JenlMh/bTup2K2R:P4vA4cPMeFgPveKkrHuS+CJyPgQJqw==
+config:
+  kubernetes:context: arn:aws:eks:us-east-1:110588987466:cluster/sre-guestbook
+  guestbook-easy:grafanaAdminPassword:
+    secure: v1:D5NWXJ/UJkev676T:k95tO59vvdYrZ1O1Z5dK+8Jou+z4ui/a
