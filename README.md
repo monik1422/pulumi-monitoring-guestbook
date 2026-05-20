@@ -78,6 +78,8 @@ pulumi up
 5. Confirm Pulumi state
 pulumi stack output
 
+<img width="1412" height="292" alt="image" src="https://github.com/user-attachments/assets/d62d33d3-6471-49e8-83dc-c431d8d2a617" />
+
 
     OUTPUT                     VALUE
     grafanaAccessUrl           http://a4d972159612e429894bee08090f7a1e-942827012.us-east-1.elb.amazonaws.com
@@ -182,7 +184,7 @@ Kubernetes / Compute Resources
 Node Exporter Full
 Cluster Monitoring
 
-<img width="1907" height="952" alt="image" src="https://github.com/user-attachments/assets/6e5022db-d50a-4056-91c5-c8f031ff05c5" />
+<img width="1907" height="947" alt="image" src="https://github.com/user-attachments/assets/86b5ed71-ad4a-4fe7-8cf1-0d378b81a7ed" />
 
 
 🚨 Challenges Faced & Solutions
