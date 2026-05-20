@@ -13,14 +13,8 @@ Expose services using AWS LoadBalancer (ALB / ELB)
 
 📦 Architecture Overview
 
-User → AWS LoadBalancer (Guestbook Frontend)
-                |
-                v
-        Guestbook Frontend
-                |
-        ---------------------
-        |                   |
-     Redis Master       Redis Replica
+<img width="1536" height="1024" alt="Copilot_20260520_012828" src="https://github.com/user-attachments/assets/af83f863-bbec-44bc-97a6-39ac5bb7c930" />
+
 
 Monitoring Stack (Namespace: monitoring)
 ------------------------------------------------
