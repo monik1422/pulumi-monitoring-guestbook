@@ -59,20 +59,40 @@ pulumi version
 aws sts get-caller-identity
 
 🚀 Deployment Steps
-1️⃣ Configure Pulumi Stack
+
+1. Clone and install
+git clone https://github.com/pulumi/examples.git
+cd C:\Users\monik\examples\kubernetes-ts-guestbook\components
+npm install
+
+2. Configure Pulumi Stack
 pulumi stack init dev
 
-Set Kubernetes context:
-pulumi config set kubernetes:context <your-eks-cluster-name>
+3. Set Kubernetes context:
+pulumi config set kubernetes:context arn:aws:eks:us-east-1:110588987466:cluster/sre-guestbook
 
 Set Grafana admin password:
 pulumi config set --secret grafanaAdminPassword admin123
 
-2️⃣ Deploy Infrastructure
+4. Deploy Infrastructure
 pulumi up
+
+5. Confirm Pulumi state
+pulumi stack output
+Current stack outputs (6):
+    OUTPUT                     VALUE
+    grafanaAccessUrl           http://a4d972159612e429894bee08090f7a1e-942827012.us-east-1.elb.amazonaws.com
+    grafanaPassword            [secret]
+    grafanaUsername            admin
+    guestbookNamespaceOutput   default
+    guestbookUrl               http://a1a48a4c72115444b8099a12b80645ac-1227882136.us-east-1.elb.amazonaws.com
+    monitoringNamespaceOutput  monitoring
 
 Confirm deployment:
 kubectl get pods -A
+
+<img width="1427" height="571" alt="image" src="https://github.com/user-attachments/assets/bbc7e0e3-0db0-46b7-8dfa-30310db374dc" />
+
 
 Expected namespaces:
 default → Guestbook + Redis
@@ -131,17 +151,6 @@ Guestbook frontend service
 Namespace: default
 ⚠️ Important Fix Applied
 
-Initial issue:
-❌ Prometheus was scraping HTML endpoints
-❌ Result: "INVALID is not a valid start token"
-
-Root cause:
-Guestbook app did NOT expose /metrics
-
-Fix applied:
-✔ Replaced container with metrics-enabled app
-✔ Ensured /metrics endpoint exists
-✔ Corrected ServiceMonitor path
 
 📊 Verification Steps
 1. Check Prometheus Targets
@@ -150,24 +159,30 @@ http://localhost:9090/targets
 Expected:
 guestbook-servicemonitor → UP
 
+<img width="1915" height="957" alt="image" src="https://github.com/user-attachments/assets/d6cdb197-97a3-4963-8b42-0f7ebf9c57f1" />
+
 2. Check Metrics in Prometheus
+Query Guestbook metrics
+Pod CPU usage -->
+sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="default"}[2m]))
 
-Run query:
-up
+Pod memory usage --> 
+container_memory_working_set_bytes{namespace="default"}
 
-or:
-
-rate(http_requests_total[1m])
+Deployment replicas ready -->
+kube_deployment_status_replicas_ready{deployment="guestbook-frontend"}
 
 3. Check Grafana Dashboards
 Navigate:
 Dashboards → Browse
 
 Look for:
-
 Kubernetes / Compute Resources
 Node Exporter Full
 Cluster Monitoring
+
+<img width="1907" height="952" alt="image" src="https://github.com/user-attachments/assets/6e5022db-d50a-4056-91c5-c8f031ff05c5" />
+
 
 🚨 Challenges Faced & Solutions
 ❌ 1. Helm Chart Installation Issues
@@ -232,7 +247,6 @@ Monitoring stack must be deployed before scraping targets
 ✔ Metrics successfully collected
 ✔ Full observability pipeline working
 
-🏁 Conclusion
 This project demonstrates a production-grade Kubernetes observability setup using:
 Infrastructure as Code (Pulumi)
 Cloud-native monitoring (Prometheus + Grafana)
