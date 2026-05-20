@@ -403,13 +403,25 @@ const guestbookDashboard = new k8s.core.v1.ConfigMap("guestbook-dashboard", {
 // EXPORTS
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Retrieve Grafana service created by Helm
+const grafanaService = k8s.core.v1.Service.get(
+    "grafana-service",
+    "monitoring/kube-prometheus-stack-grafana"
+);
+
+// Guestbook URL
 export const guestbookUrl = guestbookService.status.apply((status) => {
     const ing = status?.loadBalancer?.ingress?.[0];
-    returning? `http://${ing.hostname ?? ing.ip}` : "pending";
+    return ing ? `http://${ing.hostname ?? ing.ip}` : "pending";
 });
 
-export const grafanaAccessUrl    = "run: kubectl get svc -n monitoring kube-prometheus-stack-grafana";
-export const grafanaUsername     = "admin";
-export const grafanaPassword     = grafanaAdminPassword;
+// Grafana URL (same logic as guestbook)
+export const grafanaAccessUrl = grafanaService.status.apply((status) => {
+    const ing = status?.loadBalancer?.ingress?.[0];
+    return ing ? `http://${ing.hostname ?? ing.ip}` : "pending";
+});
+
+export const grafanaUsername = "admin";
+export const grafanaPassword = grafanaAdminPassword;
 export const monitoringNamespaceOutput = monitoringNamespaceName;
-export const guestbookNamespaceOutput  = guestbookNamespace;
+export const guestbookNamespaceOutput = guestbookNamespace;
